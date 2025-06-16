@@ -1,0 +1,32 @@
+# PatchCore训练GUI依赖项
+
+# 基础GUI框架
+PyQt5>=5.15.0
+
+# 深度学习框架
+torch>=1.9.0
+torchvision>=0.10.0
+
+# 异常检测库 (需要从源码安装)
+# anomalib (通过 pip install -e . 安装)
+
+# 数据处理
+numpy>=1.21.0
+opencv-python>=4.5.0
+Pillow>=8.3.0
+
+# 科学计算
+scikit-learn>=1.0.0
+scikit-image>=0.18.0
+
+# 深度学习支持库
+lightning>=2.0.0
+kornia>=0.6.0
+torchmetrics>=0.9.0
+
+# 可视化
+matplotlib>=3.5.0
+
+# 工具库
+tqdm>=4.62.0
+omegaconf>=2.1.0 

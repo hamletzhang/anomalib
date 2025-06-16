@@ -1,0 +1,19 @@
+{
+    "data_root": "./project_test_organized",
+    "normal_train_dir": "train/normal",
+    "normal_test_dir": "test/normal",
+    "abnormal_test_dir": "test/abnormal",
+    "dataset_name": "custom_dataset",
+    "backbone": "wide_resnet50_2",
+    "layers": [
+        "layer2",
+        "layer3"
+    ],
+    "coreset_sampling_ratio": 0.1,
+    "num_neighbors": 9,
+    "train_batch_size": 16,
+    "eval_batch_size": 16,
+    "max_epochs": 1,
+    "num_workers": 0,
+    "output_dir": "./results"
+}
