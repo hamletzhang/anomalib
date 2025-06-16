@@ -56,7 +56,10 @@ class PatchCoreGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PatchCore 异常检测训练工具")
-        self.setGeometry(100, 100, 800, 900)
+        self.setGeometry(100, 100, 900, 1000)  # 增大窗口尺寸
+        
+        # 设置全局字体
+        self.setup_fonts()
         
         # 设置样式
         self.setStyleSheet(self.get_stylesheet())
@@ -71,6 +74,23 @@ class PatchCoreGUI(QMainWindow):
         # 加载默认配置
         self.load_default_config()
         
+    def setup_fonts(self):
+        """设置全局字体大小"""
+        # 创建基础字体
+        base_font = QFont()
+        base_font.setFamily("Microsoft YaHei")  # 使用微软雅黑字体
+        base_font.setPointSize(12)  # 基础字体大小
+        
+        # 设置应用程序默认字体
+        QApplication.instance().setFont(base_font)
+        
+        # 为不同组件设置特定字体大小
+        self.label_font = QFont("Microsoft YaHei", 11)
+        self.input_font = QFont("Microsoft YaHei", 11)
+        self.button_font = QFont("Microsoft YaHei", 12, QFont.Bold)
+        self.log_font = QFont("Consolas", 11)  # 日志使用等宽字体
+        self.title_font = QFont("Microsoft YaHei", 13, QFont.Bold)
+        
     def get_stylesheet(self):
         """返回界面样式"""
         return """
@@ -79,6 +99,7 @@ class PatchCoreGUI(QMainWindow):
         }
         QGroupBox {
             font-weight: bold;
+            font-size: 13px;
             border: 2px solid #cccccc;
             border-radius: 5px;
             margin-top: 1ex;
@@ -93,10 +114,12 @@ class PatchCoreGUI(QMainWindow):
             background-color: #4CAF50;
             border: none;
             color: white;
-            padding: 8px 16px;
+            padding: 10px 20px;
             text-align: center;
-            font-size: 14px;
+            font-size: 12px;
+            font-weight: bold;
             border-radius: 4px;
+            min-height: 20px;
         }
         QPushButton:hover {
             background-color: #45a049;
@@ -109,16 +132,37 @@ class PatchCoreGUI(QMainWindow):
             color: #666666;
         }
         QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-            padding: 5px;
+            padding: 8px;
             border: 1px solid #ddd;
             border-radius: 3px;
-            font-size: 12px;
+            font-size: 11px;
+            min-height: 15px;
         }
         QTextEdit {
             border: 1px solid #ddd;
             border-radius: 3px;
             font-family: Consolas, Monaco, monospace;
-            font-size: 10px;
+            font-size: 11px;
+            padding: 5px;
+        }
+        QLabel {
+            font-size: 11px;
+            padding: 2px;
+        }
+        QCheckBox {
+            font-size: 11px;
+            spacing: 5px;
+        }
+        QProgressBar {
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        QProgressBar::chunk {
+            background-color: #4CAF50;
+            border-radius: 3px;
         }
         """
         
@@ -137,6 +181,7 @@ class PatchCoreGUI(QMainWindow):
         main_layout.addWidget(scroll)
         
         layout = QVBoxLayout(scroll_widget)
+        layout.setSpacing(10)  # 增加间距
         
         # 创建各个配置组
         layout.addWidget(self.create_data_config_group())
@@ -149,34 +194,58 @@ class PatchCoreGUI(QMainWindow):
     def create_data_config_group(self):
         """创建数据配置组"""
         group = QGroupBox("数据集配置")
+        group.setFont(self.title_font)
         layout = QGridLayout(group)
+        layout.setSpacing(8)  # 增加间距
         
         # 数据根目录
-        layout.addWidget(QLabel("数据根目录:"), 0, 0)
+        label = QLabel("数据根目录:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 0, 0)
+        
         self.data_root_edit = QLineEdit("./project_test_organized")
+        self.data_root_edit.setFont(self.input_font)
         layout.addWidget(self.data_root_edit, 0, 1)
+        
         self.data_root_btn = QPushButton("浏览")
+        self.data_root_btn.setFont(self.button_font)
         self.data_root_btn.clicked.connect(self.browse_data_root)
         layout.addWidget(self.data_root_btn, 0, 2)
         
         # 训练正常样本目录
-        layout.addWidget(QLabel("训练正常样本:"), 1, 0)
+        label = QLabel("训练正常样本:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 1, 0)
+        
         self.normal_train_edit = QLineEdit("train/normal")
+        self.normal_train_edit.setFont(self.input_font)
         layout.addWidget(self.normal_train_edit, 1, 1, 1, 2)
         
         # 测试正常样本目录
-        layout.addWidget(QLabel("测试正常样本:"), 2, 0)
+        label = QLabel("测试正常样本:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 2, 0)
+        
         self.normal_test_edit = QLineEdit("test/normal")
+        self.normal_test_edit.setFont(self.input_font)
         layout.addWidget(self.normal_test_edit, 2, 1, 1, 2)
         
         # 测试异常样本目录
-        layout.addWidget(QLabel("测试异常样本:"), 3, 0)
+        label = QLabel("测试异常样本:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 3, 0)
+        
         self.abnormal_test_edit = QLineEdit("test/abnormal")
+        self.abnormal_test_edit.setFont(self.input_font)
         layout.addWidget(self.abnormal_test_edit, 3, 1, 1, 2)
         
         # 数据集名称
-        layout.addWidget(QLabel("数据集名称:"), 4, 0)
+        label = QLabel("数据集名称:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 4, 0)
+        
         self.dataset_name_edit = QLineEdit("custom_dataset")
+        self.dataset_name_edit.setFont(self.input_font)
         layout.addWidget(self.dataset_name_edit, 4, 1, 1, 2)
         
         return group
@@ -184,16 +253,25 @@ class PatchCoreGUI(QMainWindow):
     def create_model_config_group(self):
         """创建模型配置组"""
         group = QGroupBox("模型配置")
+        group.setFont(self.title_font)
         layout = QGridLayout(group)
+        layout.setSpacing(8)
         
         # 骨干网络
-        layout.addWidget(QLabel("骨干网络:"), 0, 0)
+        label = QLabel("骨干网络:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 0, 0)
+        
         self.backbone_combo = QComboBox()
+        self.backbone_combo.setFont(self.input_font)
         self.backbone_combo.addItems(["wide_resnet50_2", "resnet18", "resnet50"])
         layout.addWidget(self.backbone_combo, 0, 1)
         
         # 特征层
-        layout.addWidget(QLabel("特征层:"), 1, 0)
+        label = QLabel("特征层:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 1, 0)
+        
         layer_widget = QWidget()
         layer_layout = QHBoxLayout(layer_widget)
         layer_layout.setContentsMargins(0, 0, 0, 0)
@@ -202,6 +280,10 @@ class PatchCoreGUI(QMainWindow):
         self.layer2_cb = QCheckBox("layer2")
         self.layer3_cb = QCheckBox("layer3")
         self.layer4_cb = QCheckBox("layer4")
+        
+        # 设置复选框字体
+        for cb in [self.layer1_cb, self.layer2_cb, self.layer3_cb, self.layer4_cb]:
+            cb.setFont(self.label_font)
         
         # 默认选择layer2和layer3
         self.layer2_cb.setChecked(True)
@@ -216,8 +298,12 @@ class PatchCoreGUI(QMainWindow):
         layout.addWidget(layer_widget, 1, 1)
         
         # 核心集采样比例
-        layout.addWidget(QLabel("核心集采样比例:"), 2, 0)
+        label = QLabel("核心集采样比例:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 2, 0)
+        
         self.coreset_ratio_spin = QDoubleSpinBox()
+        self.coreset_ratio_spin.setFont(self.input_font)
         self.coreset_ratio_spin.setRange(0.01, 1.0)
         self.coreset_ratio_spin.setSingleStep(0.01)
         self.coreset_ratio_spin.setValue(0.1)
@@ -225,8 +311,12 @@ class PatchCoreGUI(QMainWindow):
         layout.addWidget(self.coreset_ratio_spin, 2, 1)
         
         # 最近邻数量
-        layout.addWidget(QLabel("最近邻数量:"), 3, 0)
+        label = QLabel("最近邻数量:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 3, 0)
+        
         self.num_neighbors_spin = QSpinBox()
+        self.num_neighbors_spin.setFont(self.input_font)
         self.num_neighbors_spin.setRange(1, 50)
         self.num_neighbors_spin.setValue(9)
         layout.addWidget(self.num_neighbors_spin, 3, 1)
@@ -236,32 +326,50 @@ class PatchCoreGUI(QMainWindow):
     def create_training_config_group(self):
         """创建训练配置组"""
         group = QGroupBox("训练配置")
+        group.setFont(self.title_font)
         layout = QGridLayout(group)
+        layout.setSpacing(8)
         
         # 训练批次大小
-        layout.addWidget(QLabel("训练批次大小:"), 0, 0)
+        label = QLabel("训练批次大小:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 0, 0)
+        
         self.train_batch_spin = QSpinBox()
+        self.train_batch_spin.setFont(self.input_font)
         self.train_batch_spin.setRange(1, 256)
         self.train_batch_spin.setValue(16)
         layout.addWidget(self.train_batch_spin, 0, 1)
         
         # 评估批次大小
-        layout.addWidget(QLabel("评估批次大小:"), 1, 0)
+        label = QLabel("评估批次大小:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 1, 0)
+        
         self.eval_batch_spin = QSpinBox()
+        self.eval_batch_spin.setFont(self.input_font)
         self.eval_batch_spin.setRange(1, 256)
         self.eval_batch_spin.setValue(16)
         layout.addWidget(self.eval_batch_spin, 1, 1)
         
         # 最大训练轮数
-        layout.addWidget(QLabel("最大训练轮数:"), 2, 0)
+        label = QLabel("最大训练轮数:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 2, 0)
+        
         self.max_epochs_spin = QSpinBox()
+        self.max_epochs_spin.setFont(self.input_font)
         self.max_epochs_spin.setRange(1, 1000)
         self.max_epochs_spin.setValue(1)
         layout.addWidget(self.max_epochs_spin, 2, 1)
         
         # 工作进程数
-        layout.addWidget(QLabel("工作进程数:"), 3, 0)
+        label = QLabel("工作进程数:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 3, 0)
+        
         self.num_workers_spin = QSpinBox()
+        self.num_workers_spin.setFont(self.input_font)
         self.num_workers_spin.setRange(0, 16)
         self.num_workers_spin.setValue(0)
         layout.addWidget(self.num_workers_spin, 3, 1)
@@ -271,13 +379,21 @@ class PatchCoreGUI(QMainWindow):
     def create_output_config_group(self):
         """创建输出配置组"""
         group = QGroupBox("输出配置")
+        group.setFont(self.title_font)
         layout = QGridLayout(group)
+        layout.setSpacing(8)
         
         # 输出目录
-        layout.addWidget(QLabel("输出目录:"), 0, 0)
+        label = QLabel("输出目录:")
+        label.setFont(self.label_font)
+        layout.addWidget(label, 0, 0)
+        
         self.output_dir_edit = QLineEdit("./results")
+        self.output_dir_edit.setFont(self.input_font)
         layout.addWidget(self.output_dir_edit, 0, 1)
+        
         self.output_dir_btn = QPushButton("浏览")
+        self.output_dir_btn.setFont(self.button_font)
         self.output_dir_btn.clicked.connect(self.browse_output_dir)
         layout.addWidget(self.output_dir_btn, 0, 2)
         
@@ -286,20 +402,25 @@ class PatchCoreGUI(QMainWindow):
     def create_control_group(self):
         """创建控制按钮组"""
         group = QGroupBox("操作控制")
+        group.setFont(self.title_font)
         layout = QHBoxLayout(group)
+        layout.setSpacing(10)
         
         # 加载配置按钮
         self.load_config_btn = QPushButton("加载配置")
+        self.load_config_btn.setFont(self.button_font)
         self.load_config_btn.clicked.connect(self.load_config)
         layout.addWidget(self.load_config_btn)
         
         # 保存配置按钮
         self.save_config_btn = QPushButton("保存配置")
+        self.save_config_btn.setFont(self.button_font)
         self.save_config_btn.clicked.connect(self.save_config)
         layout.addWidget(self.save_config_btn)
         
         # 检查数据按钮
         self.check_data_btn = QPushButton("检查数据")
+        self.check_data_btn.setFont(self.button_font)
         self.check_data_btn.clicked.connect(self.check_data)
         layout.addWidget(self.check_data_btn)
         
@@ -307,13 +428,15 @@ class PatchCoreGUI(QMainWindow):
         
         # 开始训练按钮
         self.start_btn = QPushButton("开始训练")
+        self.start_btn.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
         self.start_btn.clicked.connect(self.start_training)
         self.start_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
                 font-weight: bold;
-                font-size: 16px;
-                padding: 10px 20px;
+                font-size: 14px;
+                padding: 12px 24px;
+                min-height: 25px;
             }
             QPushButton:hover {
                 background-color: #1976D2;
@@ -323,12 +446,16 @@ class PatchCoreGUI(QMainWindow):
         
         # 停止训练按钮
         self.stop_btn = QPushButton("停止训练")
+        self.stop_btn.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
         self.stop_btn.clicked.connect(self.stop_training)
         self.stop_btn.setEnabled(False)
         self.stop_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f44336;
                 font-weight: bold;
+                font-size: 14px;
+                padding: 12px 24px;
+                min-height: 25px;
             }
             QPushButton:hover {
                 background-color: #d32f2f;
@@ -341,21 +468,27 @@ class PatchCoreGUI(QMainWindow):
     def create_log_group(self):
         """创建日志显示组"""
         group = QGroupBox("训练日志")
+        group.setFont(self.title_font)
         layout = QVBoxLayout(group)
+        layout.setSpacing(8)
         
         # 进度条
         self.progress_bar = QProgressBar()
+        self.progress_bar.setFont(self.label_font)
         self.progress_bar.setVisible(False)
+        self.progress_bar.setMinimumHeight(25)  # 增加进度条高度
         layout.addWidget(self.progress_bar)
         
         # 日志文本框
         self.log_text = QTextEdit()
-        self.log_text.setMinimumHeight(200)
-        self.log_text.setMaximumHeight(300)
+        self.log_text.setFont(self.log_font)
+        self.log_text.setMinimumHeight(250)  # 增加日志框高度
+        self.log_text.setMaximumHeight(350)
         layout.addWidget(self.log_text)
         
         # 清除日志按钮
         clear_btn = QPushButton("清除日志")
+        clear_btn.setFont(self.button_font)
         clear_btn.clicked.connect(self.clear_log)
         layout.addWidget(clear_btn)
         

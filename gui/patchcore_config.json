@@ -1,5 +1,5 @@
 {
-    "data_root": "./project_test_organized",
+    "data_root": "C:/Users/Administrator/Desktop/anomalib/project_test_organized",
     "normal_train_dir": "train/normal",
     "normal_test_dir": "test/normal",
     "abnormal_test_dir": "test/abnormal",
