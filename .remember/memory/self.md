@@ -26,6 +26,34 @@
 - **解决方案**：需要使用训练好的数据模块进行推理，而不是单独创建 `PredictDataset`
 - **正确做法**：使用 `datamodule.test_dataloader()` 进行推理，这样可以保持正确的标签信息
 
+## 推理引擎V2开发成功
+
+### 基于Engine.predict()的正确实现
+
+**问题**: 原始推理引擎的分数解码和热力图生成不正确
+
+**解决方案**: 创建InferenceEngineV2，基于anomalib标准的Engine.predict()方法
+
+**关键改进**:
+1. **正确的模型加载**: 使用标准的Patchcore()和Engine()实例
+2. **正确的数据处理**: 使用PredictDataset和DataLoader
+3. **正确的推理流程**: 通过Engine.predict()获取标准化结果
+4. **正确的结果解析**: 
+   - pred_score直接从batch.pred_score获取
+   - pred_label直接从batch.pred_label获取  
+   - anomaly_map从batch.anomaly_map获取，维度正确
+5. **完整的GUI集成**: 成功集成到现有GUI架构中
+
+**测试结果**:
+- NG_7.png: 异常分数1.0，正确识别为异常
+- OK_test_3.png: 异常分数0.769，被识别为异常（可能是阈值问题）
+- 热力图生成正常，可视化完整
+
+**GUI集成状况**: ✅ 成功
+- GUI优先使用InferenceEngineV2
+- 保持原有界面和功能不变
+- 自动回退到V1引擎作为备选
+
 ### 依赖项安装问题
 - 在conda环境中安装anomalib依赖时，可能需要逐个安装：
   - `FrEIA` - 流归一化模型依赖

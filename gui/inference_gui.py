@@ -18,8 +18,17 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QPainter, QPen
 from PyQt5.QtWidgets import QMessageBox
 
-# 导入推理引擎
-from inference_engine import InferenceEngine
+# 导入推理引擎 - 优先使用V2版本
+try:
+    from inference_engine_v2 import InferenceEngineV2 as InferenceEngine
+    print("✅ 使用推理引擎V2")
+except ImportError as e:
+    try:
+        from inference_engine import InferenceEngine
+        print("⚠️ 使用推理引擎V1作为后备")
+    except ImportError as e2:
+        print(f"❌ 导入错误: {e2}")
+        InferenceEngine = None
 
 
 class InferenceThread(QThread):
