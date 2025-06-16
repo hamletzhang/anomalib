@@ -50,6 +50,315 @@ class TrainingThread(QThread):
             self.finished_signal.emit(False, f"训练出错: {str(e)}")
 
 
+class ScoreDistributionThread(QThread):
+    """得分分布图生成线程"""
+    log_signal = pyqtSignal(str)
+    progress_signal = pyqtSignal(int)
+    finished_signal = pyqtSignal(bool, str, list)  # success, message, output_files
+    
+    def __init__(self, model_path, use_full_data=True):
+        super().__init__()
+        self.model_path = model_path
+        self.use_full_data = use_full_data
+        
+    def run(self):
+        """运行得分分布图生成"""
+        try:
+            self.log_signal.emit("📊 开始加载模型和数据...")
+            self.progress_signal.emit(10)
+            
+            # 导入必要的模块
+            import numpy as np
+            import matplotlib.pyplot as plt
+            from anomalib.data import Folder
+            from anomalib.engine import Engine
+            from anomalib.models import Patchcore
+            from datetime import datetime
+            import lightning as L
+            from anomalib.callbacks import LoadModelCallback
+            
+            # 设置matplotlib中文字体
+            plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+            plt.rcParams['axes.unicode_minus'] = False
+            
+            self.log_signal.emit("🤖 初始化模型...")
+            self.progress_signal.emit(20)
+            
+            # 初始化模型和引擎
+            model = Patchcore()
+            engine = Engine()
+            
+            # 创建数据模块
+            if self.use_full_data:
+                self.log_signal.emit("📂 加载全量测试数据...")
+                datamodule = Folder(
+                    name="project_test_organized",
+                    root="./project_test_organized",
+                    normal_dir="train/normal",
+                    normal_test_dir="test/ALL_OK",
+                    abnormal_dir="test/ALL_NG",
+                    train_batch_size=32,
+                    eval_batch_size=32,
+                    num_workers=0,
+                )
+            else:
+                self.log_signal.emit("📂 加载部分测试数据...")
+                datamodule = Folder(
+                    name="project_test_organized",
+                    root="./project_test_organized",
+                    normal_dir="train/normal",
+                    normal_test_dir="test/normal",
+                    abnormal_dir="test/abnormal",
+                    train_batch_size=32,
+                    eval_batch_size=32,
+                    num_workers=0,
+                )
+                
+            datamodule.setup()
+            self.progress_signal.emit(40)
+            
+            self.log_signal.emit("🔮 开始推理...")
+            
+            # 创建自定义trainer，禁用可视化回调
+            trainer = L.Trainer(
+                accelerator="auto",
+                devices="auto",
+                logger=False,
+                enable_checkpointing=False,
+                enable_progress_bar=False,
+                enable_model_summary=False,
+                callbacks=[LoadModelCallback()]
+            )
+            
+            # 进行推理
+            predictions = engine.predict(
+                model=model,
+                datamodule=datamodule,
+                ckpt_path=self.model_path,
+                return_predictions=True,
+                trainer=trainer,
+            )
+            
+            self.progress_signal.emit(70)
+            
+            if not predictions:
+                self.finished_signal.emit(False, "推理失败，无法生成得分分布图", [])
+                return
+                
+            self.log_signal.emit("📊 收集得分数据...")
+            
+            # 收集得分数据
+            normal_scores = []
+            abnormal_scores = []
+            
+            for batch in predictions:
+                for i in range(len(batch.image_path)):
+                    pred_score = batch.pred_score[i].item()
+                    gt_label = batch.gt_label[i].item()
+                    
+                    if gt_label == 0:  # 正常样本
+                        normal_scores.append(pred_score)
+                    else:  # 异常样本
+                        abnormal_scores.append(pred_score)
+            
+            self.progress_signal.emit(80)
+            self.log_signal.emit("🎨 生成可视化图表...")
+            
+            # 生成得分分布图
+            output_files = []
+            
+            # 1. 得分分布图
+            dist_file = self.create_score_distribution_plot(normal_scores, abnormal_scores)
+            if dist_file:
+                output_files.append(dist_file)
+                
+            # 2. 阈值分析图
+            self.log_signal.emit("📈 生成阈值分析图...")
+            threshold_results = self.analyze_threshold_performance(normal_scores, abnormal_scores)
+            analysis_file = self.create_threshold_analysis_plot(threshold_results)
+            if analysis_file:
+                output_files.append(analysis_file)
+                
+            self.progress_signal.emit(100)
+            
+            # 推荐最优阈值
+            optimal_threshold = self.recommend_optimal_threshold(threshold_results)
+            
+            message = f"得分分布图生成完成！推荐阈值: {optimal_threshold:.3f}"
+            self.finished_signal.emit(True, message, output_files)
+            
+        except Exception as e:
+            self.finished_signal.emit(False, f"生成得分分布图时出错: {str(e)}", [])
+            
+    def create_score_distribution_plot(self, normal_scores, abnormal_scores):
+        """创建得分分布图"""
+        try:
+            import matplotlib.pyplot as plt
+            import numpy as np
+            from datetime import datetime
+            
+            # 创建图形
+            fig, ax = plt.subplots(figsize=(12, 8))
+            
+            # 设置分数范围和分箱
+            score_min = 0.0
+            score_max = 1.0
+            num_bins = 100
+            bins = np.linspace(score_min, score_max, num_bins + 1)
+            
+            # 计算直方图数据
+            normal_hist, _ = np.histogram(normal_scores, bins=bins)
+            abnormal_hist, _ = np.histogram(abnormal_scores, bins=bins)
+            
+            # 计算分箱中心点
+            bin_centers = (bins[:-1] + bins[1:]) / 2
+            
+            # 绘制直方图
+            ax.plot(bin_centers, normal_hist, 'g-', linewidth=2, label='标注(OK)', marker='o', markersize=3)
+            ax.plot(bin_centers, abnormal_hist, 'r-', linewidth=2, label='标注(NG)', marker='s', markersize=3)
+            
+            # 设置图表属性
+            ax.set_xlabel('得分', fontsize=14)
+            ax.set_ylabel('图片数量', fontsize=14)
+            ax.set_title('得分分布图', fontsize=16, fontweight='bold')
+            ax.legend(fontsize=12)
+            ax.grid(True, alpha=0.3)
+            
+            # 设置坐标轴范围
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, max(max(normal_hist) if normal_hist.size > 0 else 0, 
+                              max(abnormal_hist) if abnormal_hist.size > 0 else 0) * 1.1)
+            
+            # 添加统计信息文本
+            stats_text = f"""样本统计:
+正常样本 (OK): {len(normal_scores)} 张
+异常样本 (NG): {len(abnormal_scores)} 张
+总计: {len(normal_scores) + len(abnormal_scores)} 张
+
+得分统计:
+OK样本平均分: {np.mean(normal_scores):.4f}
+NG样本平均分: {np.mean(abnormal_scores):.4f}
+OK样本中位数: {np.median(normal_scores):.4f}
+NG样本中位数: {np.median(abnormal_scores):.4f}"""
+            
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            
+            plt.tight_layout()
+            
+            # 保存图片
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"score_distribution_{timestamp}.png"
+            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            self.log_signal.emit(f"📊 得分分布图已保存: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            self.log_signal.emit(f"❌ 生成得分分布图失败: {str(e)}")
+            return None
+            
+    def analyze_threshold_performance(self, normal_scores, abnormal_scores, threshold_range=(0.1, 0.9), step=0.05):
+        """分析不同阈值下的性能表现"""
+        import numpy as np
+        
+        thresholds = np.arange(threshold_range[0], threshold_range[1] + step, step)
+        results = []
+        
+        for threshold in thresholds:
+            # 计算混淆矩阵
+            tp = sum(1 for score in abnormal_scores if score >= threshold)
+            fn = sum(1 for score in abnormal_scores if score < threshold)
+            tn = sum(1 for score in normal_scores if score < threshold)
+            fp = sum(1 for score in normal_scores if score >= threshold)
+            
+            # 计算指标
+            sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
+            f1_score = 2 * precision * sensitivity / (precision + sensitivity) if (precision + sensitivity) > 0 else 0
+            
+            results.append({
+                'threshold': threshold,
+                'accuracy': accuracy,
+                'sensitivity': sensitivity,
+                'specificity': specificity,
+                'precision': precision,
+                'f1_score': f1_score,
+                'tp': tp, 'fn': fn, 'tn': tn, 'fp': fp
+            })
+        
+        return results
+        
+    def create_threshold_analysis_plot(self, threshold_results):
+        """创建阈值分析图"""
+        try:
+            import matplotlib.pyplot as plt
+            from datetime import datetime
+            
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+            
+            thresholds = [r['threshold'] for r in threshold_results]
+            accuracies = [r['accuracy'] for r in threshold_results]
+            sensitivities = [r['sensitivity'] for r in threshold_results]
+            specificities = [r['specificity'] for r in threshold_results]
+            f1_scores = [r['f1_score'] for r in threshold_results]
+            
+            # 第一个子图：准确率和F1分数
+            ax1.plot(thresholds, accuracies, 'b-', linewidth=2, label='准确率', marker='o')
+            ax1.plot(thresholds, f1_scores, 'purple', linewidth=2, label='F1分数', marker='s')
+            ax1.set_xlabel('阈值', fontsize=12)
+            ax1.set_ylabel('指标值', fontsize=12)
+            ax1.set_title('不同阈值下的性能指标', fontsize=14, fontweight='bold')
+            ax1.legend(fontsize=11)
+            ax1.grid(True, alpha=0.3)
+            ax1.set_ylim(0, 1)
+            
+            # 第二个子图：敏感性和特异性
+            ax2.plot(thresholds, sensitivities, 'r-', linewidth=2, label='敏感性(异常检出率)', marker='^')
+            ax2.plot(thresholds, specificities, 'g-', linewidth=2, label='特异性(正常识别率)', marker='v')
+            ax2.set_xlabel('阈值', fontsize=12)
+            ax2.set_ylabel('指标值', fontsize=12)
+            ax2.set_title('敏感性vs特异性', fontsize=14, fontweight='bold')
+            ax2.legend(fontsize=11)
+            ax2.grid(True, alpha=0.3)
+            ax2.set_ylim(0, 1)
+            
+            plt.tight_layout()
+            
+            # 保存图片
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"threshold_analysis_{timestamp}.png"
+            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            self.log_signal.emit(f"📈 阈值分析图已保存: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            self.log_signal.emit(f"❌ 生成阈值分析图失败: {str(e)}")
+            return None
+            
+    def recommend_optimal_threshold(self, threshold_results):
+        """推荐最优阈值"""
+        if not threshold_results:
+            return 0.5
+            
+        # 找到F1分数最高的阈值
+        best_f1 = max(threshold_results, key=lambda x: x['f1_score'])
+        
+        # 输出推荐信息到日志
+        self.log_signal.emit(f"🎯 推荐阈值: {best_f1['threshold']:.3f}")
+        self.log_signal.emit(f"   F1分数: {best_f1['f1_score']:.4f}")
+        self.log_signal.emit(f"   准确率: {best_f1['accuracy']:.4f}")
+        self.log_signal.emit(f"   敏感性: {best_f1['sensitivity']:.4f}")
+        self.log_signal.emit(f"   特异性: {best_f1['specificity']:.4f}")
+        
+        return best_f1['threshold']
+
+
 class PatchCoreGUI(QMainWindow):
     """PatchCore训练GUI主界面"""
     
@@ -424,6 +733,27 @@ class PatchCoreGUI(QMainWindow):
         self.check_data_btn.clicked.connect(self.check_data)
         layout.addWidget(self.check_data_btn)
         
+        # 得分分布图按钮
+        self.score_dist_btn = QPushButton("生成得分分布图")
+        self.score_dist_btn.setFont(self.button_font)
+        self.score_dist_btn.clicked.connect(self.generate_score_distribution)
+        self.score_dist_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 10px 16px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:pressed {
+                background-color: #E65100;
+            }
+        """)
+        layout.addWidget(self.score_dist_btn)
+        
         layout.addStretch()
         
         # 开始训练按钮
@@ -669,7 +999,20 @@ class PatchCoreGUI(QMainWindow):
         
         if success:
             self.log(f"✅ {message}")
-            QMessageBox.information(self, "训练完成", message)
+            
+            # 训练成功后询问是否生成得分分布图
+            reply = QMessageBox.question(
+                self, 
+                "训练完成", 
+                f"{message}\n\n是否要生成得分分布图来评估模型性能？\n(这将对测试数据进行推理并生成可视化图表)",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            
+            if reply == QMessageBox.Yes:
+                self.generate_score_distribution()
+            else:
+                QMessageBox.information(self, "训练完成", "训练完成！可以稍后点击'生成得分分布图'按钮来评估模型性能。")
         else:
             self.log(f"❌ {message}")
             QMessageBox.warning(self, "训练失败", message)
@@ -692,6 +1035,81 @@ class PatchCoreGUI(QMainWindow):
     def clear_log(self):
         """清除日志"""
         self.log_text.clear()
+        
+    def generate_score_distribution(self):
+        """生成得分分布图"""
+        # 检查是否存在训练好的模型
+        config = self.get_current_config()
+        output_dir = config.get("output_dir", "./results")
+        dataset_name = config.get("dataset_name", "custom_dataset")
+        
+        # 查找最新的模型文件
+        model_pattern = f"{output_dir}/Patchcore/{dataset_name}/*/weights/lightning/model.ckpt"
+        import glob
+        model_files = glob.glob(model_pattern)
+        
+        if not model_files:
+            QMessageBox.warning(self, "错误", 
+                "未找到训练好的模型！\n请先完成模型训练。")
+            return
+            
+        # 选择最新的模型
+        latest_model = max(model_files, key=os.path.getctime)
+        self.log(f"🔍 找到模型文件: {latest_model}")
+        
+        # 询问用户选择测试模式
+        reply = QMessageBox.question(
+            self,
+            "选择测试模式",
+            "请选择要分析的数据集:\n\n"
+            "Yes - 全量测试数据 (所有 OK 和 NG 样本)\n"
+            "No - 部分测试数据 (train/test 分割的测试集)\n\n"
+            "建议使用全量数据获得更全面的分析结果。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        
+        use_full_data = (reply == QMessageBox.Yes)
+        mode_text = "全量测试数据" if use_full_data else "部分测试数据"
+        
+        self.log(f"📊 开始生成得分分布图 - 使用{mode_text}...")
+        
+        # 启动得分分布生成线程
+        self.score_dist_thread = ScoreDistributionThread(latest_model, use_full_data)
+        self.score_dist_thread.log_signal.connect(self.log)
+        self.score_dist_thread.progress_signal.connect(self.update_progress)
+        self.score_dist_thread.finished_signal.connect(self.score_distribution_finished)
+        
+        # 禁用按钮，显示进度条
+        self.score_dist_btn.setEnabled(False)
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        
+        self.score_dist_thread.start()
+        
+    def score_distribution_finished(self, success, message, output_files=None):
+        """得分分布图生成完成回调"""
+        # 恢复界面状态
+        self.score_dist_btn.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        
+        if success:
+            self.log(f"✅ {message}")
+            
+            # 显示生成的文件
+            if output_files:
+                files_text = "\n".join([f"• {os.path.basename(f)}" for f in output_files])
+                QMessageBox.information(
+                    self,
+                    "得分分布图生成完成",
+                    f"{message}\n\n生成的文件:\n{files_text}\n\n"
+                    "图片已保存到当前目录，可以用图片查看器打开查看。"
+                )
+            else:
+                QMessageBox.information(self, "完成", message)
+        else:
+            self.log(f"❌ {message}")
+            QMessageBox.warning(self, "生成失败", message)
 
 
 def main():
