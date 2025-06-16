@@ -177,3 +177,4 @@ lightning_logs/
 mlruns
 /project_test
 *.png
+gui/model.ckpt

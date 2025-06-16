@@ -82,7 +82,7 @@ def main():
     engine = Engine()
     
     # 2. 模型检查点路径
-    ckpt_path = "results/Patchcore/project_test_organized/v3/weights/lightning/model.ckpt"
+    ckpt_path = r"C:\Users\Administrator\Desktop\anomalib\gui\results\Patchcore\custom_dataset\v0\weights\lightning\model.ckpt"
     
     if not os.path.exists(ckpt_path):
         print(f"❌ 未找到模型文件: {ckpt_path}")

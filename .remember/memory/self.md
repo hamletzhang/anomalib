@@ -33,7 +33,52 @@
   - `open_clip_torch` - CLIP模型支持
 - 使用 `pip install -e .` 以开发模式安装anomalib
 
-## GUI界面改进问题 (新增)
+## PatchCore推理引擎错误修正
+
+### InferenceBatch对象访问错误
+
+**Mistake**: 将模型推理结果当作字典处理
+
+Wrong: 
+```python
+anomaly_score = predictions["anomaly_score"].cpu().numpy()[0]
+anomaly_map = predictions["anomaly_map"].cpu().numpy()[0]
+pred_label = predictions["pred_label"].cpu().numpy()[0]
+```
+
+Correct:
+```python
+# InferenceBatch对象需要用属性访问
+anomaly_score = predictions.pred_score.cpu().numpy()
+if anomaly_score.ndim > 0:
+    anomaly_score = anomaly_score[0] if len(anomaly_score) > 0 else 0.0
+
+anomaly_map = predictions.anomaly_map.cpu().numpy()[0]
+
+# pred_label可能不存在，需要检查
+if hasattr(predictions, 'pred_label'):
+    pred_label = predictions.pred_label.cpu().numpy()
+    if pred_label.ndim > 0:
+        pred_label = pred_label[0] if len(pred_label) > 0 else 0
+else:
+    pred_label = int(anomaly_score > threshold)
+```
+
+### 正常图片异常检测问题
+
+**Problem**: 训练好的模型将正常图片也识别为异常（分数1.0）
+
+**Analysis**: 
+1. 可能模型训练不充分或训练数据质量问题
+2. 默认阈值0.5可能不适合实际数据分布
+3. 需要检查模型训练过程和验证指标
+
+**Solution**: 
+- 检查模型训练日志和指标
+- 基于验证集数据动态调整异常检测阈值
+- 验证训练数据集的质量和标注正确性
+
+## GUI界面改进问题
 
 ### 字体显示问题
 - **问题**: GUI界面字体过小，特别是文本框中的字体

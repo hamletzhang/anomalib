@@ -43,6 +43,23 @@ class InferenceThread(QThread):
                 # 单图推理
                 result = self.engine.predict_single_image(self.input_path)
                 if result:
+                    # 生成可视化结果
+                    from pathlib import Path
+                    import tempfile
+                    
+                    # 创建临时目录保存可视化结果
+                    temp_dir = Path(tempfile.gettempdir()) / "anomalib_gui_viz"
+                    temp_dir.mkdir(exist_ok=True)
+                    
+                    # 生成可视化
+                    self.engine.generate_visualization(result, temp_dir)
+                    
+                    # 添加可视化文件路径到结果中
+                    image_name = Path(result["image_path"]).stem
+                    viz_file = temp_dir / f"{image_name}_result.png"
+                    if viz_file.exists():
+                        result["visualization_path"] = str(viz_file)
+                    
                     self.result_signal.emit(result)
                     self.finished_signal.emit(True, "单图推理完成")
                 else:
@@ -380,6 +397,29 @@ class InferenceGUI(QMainWindow):
         self.image_display = ImageDisplayWidget()
         layout.addWidget(self.image_display)
         
+        # 图像切换按钮组
+        button_layout = QHBoxLayout()
+        
+        self.show_original_btn = QPushButton("显示原图")
+        self.show_original_btn.setFont(self.button_font)
+        self.show_original_btn.clicked.connect(self.show_original_image)
+        self.show_original_btn.setEnabled(False)
+        button_layout.addWidget(self.show_original_btn)
+        
+        self.show_viz_btn = QPushButton("显示可视化")
+        self.show_viz_btn.setFont(self.button_font)
+        self.show_viz_btn.clicked.connect(self.show_visualization)
+        self.show_viz_btn.setEnabled(False)
+        button_layout.addWidget(self.show_viz_btn)
+        
+        self.clear_results_btn = QPushButton("清除结果")
+        self.clear_results_btn.setFont(self.button_font)
+        self.clear_results_btn.clicked.connect(self.clear_results)
+        button_layout.addWidget(self.clear_results_btn)
+        
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
         # 结果信息显示
         self.result_info = QTextEdit()
         self.result_info.setFont(self.log_font)
@@ -582,21 +622,62 @@ class InferenceGUI(QMainWindow):
         
     def display_single_result(self, result):
         """显示单图推理结果"""
-        # 显示图片
-        image_path = result["image_path"]
-        self.image_display.display_image(image_path)
+        # 优先显示可视化结果，如果没有则显示原图
+        if "visualization_path" in result and Path(result["visualization_path"]).exists():
+            # 显示可视化结果
+            self.image_display.display_image(result["visualization_path"])
+            self.log(f"🎨 显示可视化结果: {Path(result['visualization_path']).name}")
+        else:
+            # 显示原图
+            image_path = result["image_path"]
+            self.image_display.display_image(image_path)
+            self.log(f"📷 显示原始图像: {Path(image_path).name}")
         
         # 显示结果信息
-        info = f"""📷 图片: {Path(image_path).name}
+        info = f"""📷 图片: {Path(result['image_path']).name}
 🔍 异常分数: {result['anomaly_score']:.6f}
 🎯 检测阈值: {result['threshold']:.2f}
 📊 预测结果: {'🔴 异常' if result['is_anomaly'] else '🟢 正常'}
 📐 图片尺寸: {result['original_size'][0]} × {result['original_size'][1]}
 """
+        
+        # 如果有原始分数，也显示出来
+        if "raw_score" in result:
+            info += f"🔢 原始分数: {result['raw_score']:.6f}\n"
+        
+        # 如果有可视化文件，显示路径
+        if "visualization_path" in result:
+            info += f"🎨 可视化文件: {Path(result['visualization_path']).name}\n"
+            
         self.result_info.setPlainText(info)
         
         # 保存当前结果
         self.current_results = [result]
+        
+        # 启用切换按钮
+        self.show_original_btn.setEnabled(True)
+        if "visualization_path" in result:
+            self.show_viz_btn.setEnabled(True)
+        else:
+            self.show_viz_btn.setEnabled(False)
+            
+    def show_original_image(self):
+        """显示原图"""
+        if self.current_results and len(self.current_results) > 0:
+            result = self.current_results[0]
+            image_path = result["image_path"]
+            self.image_display.display_image(image_path)
+            self.log(f"📷 切换到原始图像: {Path(image_path).name}")
+            
+    def show_visualization(self):
+        """显示可视化结果"""
+        if self.current_results and len(self.current_results) > 0:
+            result = self.current_results[0]
+            if "visualization_path" in result and Path(result["visualization_path"]).exists():
+                self.image_display.display_image(result["visualization_path"])
+                self.log(f"🎨 切换到可视化结果: {Path(result['visualization_path']).name}")
+            else:
+                self.log("⚠️ 可视化结果不存在")
         
     def display_batch_results(self, results):
         """显示批量推理结果"""
@@ -637,6 +718,11 @@ class InferenceGUI(QMainWindow):
         self.image_display.clear_display()
         self.result_info.clear()
         self.current_results = []
+        
+        # 禁用切换按钮
+        self.show_original_btn.setEnabled(False)
+        self.show_viz_btn.setEnabled(False)
+        
         self.log("🧹 结果已清除")
         
     def log(self, message):
