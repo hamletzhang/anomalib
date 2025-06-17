@@ -272,6 +272,47 @@ def analyze_predictions(predictions, threshold=0.5):
     
     return normal_correct, normal_total, abnormal_correct, abnormal_total
 
+def analyze_predictions_with_threshold(predictions, threshold=0.5):
+    """使用指定阈值分析预测结果并提供详细统计"""
+    normal_correct = 0
+    normal_total = 0
+    abnormal_correct = 0
+    abnormal_total = 0
+    
+    print("=" * 60)
+    print(f"🔍 使用阈值 {threshold:.3f} 重新分析结果")
+    print("=" * 60)
+    
+    for batch in predictions:
+        for i in range(len(batch.image_path)):
+            image_path = batch.image_path[i]
+            pred_score = batch.pred_score[i].item()
+            gt_label = batch.gt_label[i].item()  # 实际标签：0: normal, 1: abnormal
+            
+            # 基于新阈值重新计算预测标签
+            new_pred_label = 1 if pred_score >= threshold else 0
+            
+            # 根据实际标签判断
+            if gt_label == 0:  # 实际为正常样本
+                normal_total += 1
+                if new_pred_label == 0:  # 预测也为正常
+                    normal_correct += 1
+                    status = "✅ 正确"
+                else:
+                    status = "❌ 错误"
+                print(f"正常样本 {normal_total:3d}: {Path(image_path).name:20s} | 分数: {pred_score:.4f} | 新预测: {'异常' if new_pred_label else '正常'} | {status}")
+                
+            else:  # 实际为异常样本
+                abnormal_total += 1
+                if new_pred_label == 1:  # 预测也为异常
+                    abnormal_correct += 1
+                    status = "✅ 正确"
+                else:
+                    status = "❌ 错误"
+                print(f"异常样本 {abnormal_total:3d}: {Path(image_path).name:20s} | 分数: {pred_score:.4f} | 新预测: {'异常' if new_pred_label else '正常'} | {status}")
+    
+    return normal_correct, normal_total, abnormal_correct, abnormal_total
+
 def main():
     print("🚀 开始使用训练好的Patchcore模型进行推理...")
     
@@ -384,41 +425,70 @@ def main():
         
         if use_optimal in ['y', 'yes']:
             print(f"\n使用推荐阈值 {optimal_threshold:.3f} 重新分析...")
-            # 这里可以添加使用新阈值重新计算的逻辑
-            # 但由于engine.predict返回的是固定阈值的结果，我们只显示统计
-            pass
-        
-        # 原始分析（使用模型默认阈值）
-        normal_correct, normal_total, abnormal_correct, abnormal_total = analyze_predictions(predictions)
-        
-        # 计算准确率
-        normal_accuracy = (normal_correct / normal_total * 100) if normal_total > 0 else 0
-        abnormal_accuracy = (abnormal_correct / abnormal_total * 100) if abnormal_total > 0 else 0
-        overall_accuracy = ((normal_correct + abnormal_correct) / (normal_total + abnormal_total) * 100) if (normal_total + abnormal_total) > 0 else 0
-        
-        print("\n" + "=" * 60)
-        print("📈 最终结果统计")
-        print("=" * 60)
-        print(f"✨ 正常样本 (OK):")
-        print(f"   判断正确: {normal_correct:3d} / {normal_total:3d} 张")
-        print(f"   准确率: {normal_accuracy:6.2f}%")
-        print()
-        print(f"⚠️  异常样本 (NG):")
-        print(f"   判断正确: {abnormal_correct:3d} / {abnormal_total:3d} 张")
-        print(f"   准确率: {abnormal_accuracy:6.2f}%")
-        print()
-        print(f"🎯 总体准确率: {overall_accuracy:6.2f}% ({normal_correct + abnormal_correct}/{normal_total + abnormal_total})")
-        print("=" * 60)
-        
-        # 混淆矩阵风格的输出
-        normal_wrong = normal_total - normal_correct
-        abnormal_wrong = abnormal_total - abnormal_correct
-        
-        print("\n📊 混淆矩阵:")
-        print("                实际标签")
-        print("              正常   异常")
-        print(f"预测   正常   {normal_correct:4d}   {abnormal_wrong:4d}")
-        print(f"       异常   {normal_wrong:4d}   {abnormal_correct:4d}")
+            
+            # 使用新阈值重新计算准确率
+            new_normal_correct, new_normal_total, new_abnormal_correct, new_abnormal_total = analyze_predictions_with_threshold(predictions, optimal_threshold)
+            
+            # 计算新的准确率
+            new_normal_accuracy = (new_normal_correct / new_normal_total * 100) if new_normal_total > 0 else 0
+            new_abnormal_accuracy = (new_abnormal_correct / new_abnormal_total * 100) if new_abnormal_total > 0 else 0
+            new_overall_accuracy = ((new_normal_correct + new_abnormal_correct) / (new_normal_total + new_abnormal_total) * 100) if (new_normal_total + new_abnormal_total) > 0 else 0
+            
+            print("\n" + "=" * 60)
+            print(f"📈 新阈值 ({optimal_threshold:.3f}) 下的结果统计")
+            print("=" * 60)
+            print(f"✨ 正常样本 (OK):")
+            print(f"   判断正确: {new_normal_correct:3d} / {new_normal_total:3d} 张")
+            print(f"   准确率: {new_normal_accuracy:6.2f}%")
+            print()
+            print(f"⚠️  异常样本 (NG):")
+            print(f"   判断正确: {new_abnormal_correct:3d} / {new_abnormal_total:3d} 张")
+            print(f"   准确率: {new_abnormal_accuracy:6.2f}%")
+            print()
+            print(f"🎯 总体准确率: {new_overall_accuracy:6.2f}% ({new_normal_correct + new_abnormal_correct}/{new_normal_total + new_abnormal_total})")
+            
+            # 新的混淆矩阵
+            new_normal_wrong = new_normal_total - new_normal_correct
+            new_abnormal_wrong = new_abnormal_total - new_abnormal_correct
+            
+            print("\n📊 新阈值下的混淆矩阵:")
+            print("                实际标签")
+            print("              正常   异常")
+            print(f"预测   正常   {new_normal_correct:4d}   {new_abnormal_wrong:4d}")
+            print(f"       异常   {new_normal_wrong:4d}   {new_abnormal_correct:4d}")
+            print("=" * 60)
+        else:
+            # 原始分析（使用模型默认阈值）
+            normal_correct, normal_total, abnormal_correct, abnormal_total = analyze_predictions(predictions)
+            
+            # 计算准确率
+            normal_accuracy = (normal_correct / normal_total * 100) if normal_total > 0 else 0
+            abnormal_accuracy = (abnormal_correct / abnormal_total * 100) if abnormal_total > 0 else 0
+            overall_accuracy = ((normal_correct + abnormal_correct) / (normal_total + abnormal_total) * 100) if (normal_total + abnormal_total) > 0 else 0
+            
+            print("\n" + "=" * 60)
+            print("📈 最终结果统计")
+            print("=" * 60)
+            print(f"✨ 正常样本 (OK):")
+            print(f"   判断正确: {normal_correct:3d} / {normal_total:3d} 张")
+            print(f"   准确率: {normal_accuracy:6.2f}%")
+            print()
+            print(f"⚠️  异常样本 (NG):")
+            print(f"   判断正确: {abnormal_correct:3d} / {abnormal_total:3d} 张")
+            print(f"   准确率: {abnormal_accuracy:6.2f}%")
+            print()
+            print(f"🎯 总体准确率: {overall_accuracy:6.2f}% ({normal_correct + abnormal_correct}/{normal_total + abnormal_total})")
+            print("=" * 60)
+            
+            # 混淆矩阵风格的输出
+            normal_wrong = normal_total - normal_correct
+            abnormal_wrong = abnormal_total - abnormal_correct
+            
+            print("\n📊 混淆矩阵:")
+            print("                实际标签")
+            print("              正常   异常")
+            print(f"预测   正常   {normal_correct:4d}   {abnormal_wrong:4d}")
+            print(f"       异常   {normal_wrong:4d}   {abnormal_correct:4d}")
         
     else:
         print("❌ 推理失败！")
